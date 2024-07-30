@@ -242,6 +242,7 @@ class RPSGame
       puts "#{human.name} played #{moves[:human]}, #{computer.name} " \
            "played #{moves[:computer]}."
     end
+    linebreak
   end
 
   def play_again?
@@ -300,7 +301,7 @@ class RPSGame
     end
 
     display_goodbye_message
-    # display_history
+    display_history
   end
 end
 
