@@ -1,6 +1,10 @@
 module Boxable
   MAX_WIDTH = 60
 
+  def display_small_box(text, width = MAX_WIDTH)
+    puts small_box(text, width)
+  end
+
   def display_big_box(text, width = MAX_WIDTH)
     puts big_box(text, width)
   end
@@ -33,6 +37,19 @@ module Boxable
     [text].flatten
   end
 
+  def small_box(text, width = MAX_WIDTH)
+    lines = force_array(text)
+    formatted_lines = lines.map { |line| plus_center_text(line, width) }
+    
+    box = [
+            plus_min_bar(width),
+            # plus_space_bar(width),
+            formatted_lines,
+            # plus_space_bar(width),
+            plus_min_bar(width)
+  ].flatten
+  end
+
   def big_box(text, width = MAX_WIDTH)
     lines = force_array(text)
     formatted_lines = lines.map { |line| sq_center_text(line, width) }
@@ -44,6 +61,18 @@ module Boxable
             sq_space_bar(width),
             sq_equals_bar(width)
   ].flatten
+  end
+
+  def plus_min_bar(width)
+    '+' + '-' * (width - 2) + '+'
+  end
+
+  def plus_space_bar(width)
+    '|' + ' ' * (width - 2) + '|'
+  end
+
+  def plus_center_text(text, width)
+    '| ' + text.center(width - 4) + ' |'
   end
 
   def sq_equals_bar(width)
@@ -74,10 +103,16 @@ module Displayable
 
   def say(text)
     puts "  " + text
+    # puts text
   end
 
   def list(text)
     say(" — " + text)
+  end
+
+  def prompt(text)
+    say(text)
+    # puts "  " + text
   end
 
   def join_and(items)
@@ -94,6 +129,7 @@ module Displayable
   def apostrophe_s(name)
     name.end_with?('s') ? name + "'" : name + "'s"
   end
+  
 end
 
 class Deck
@@ -170,6 +206,7 @@ end
 
 class Participant
   attr_reader :name, :hand, :points
+  attr_accessor :score
 
   include Displayable
 
@@ -177,16 +214,7 @@ class Participant
     @deck = deck
     @hand = []
     @points = 0
-  end
-
-  def turn
-    name_turn
-
-    until bust?
-      return unless hit?
-      hit
-    end
-    bust
+    @score = 0
   end
 
   def draw_card
@@ -198,14 +226,32 @@ class Participant
     points > TwentyOne::BUST
   end
 
+  def stay?
+    say "It's #{apostrophe_s(name)} turn."
+    sleep 1.25
+    !(hit?)
+  end
+
+  def hit(hit_text)
+    say hit_text
+    sleep 1.5
+    draw_card
+  end
+
+  def bust
+    puts "And that's a bust!"
+    sleep 1.75
+  end
+
+  def empty_hand
+    self.hand = []
+    self.points = 0
+  end
+
   private
 
   attr_reader :deck
   attr_writer :points, :hand, :name
-
-  def name_turn
-    puts "It's #{apostrophe_s(name)} turn."
-  end
   
   def update_points
     total = hand.map(&:worth).sum
@@ -224,21 +270,16 @@ class Participant
     end
     self.points = total
   end
-
-  def bust
-    puts "And that's a bust!"
-  end
 end
 
 class Player < Participant
   def initialize(deck)
     super
-    # @name = "Placeholder"
     prompt_name
   end
 
-  def display_hand
-    puts "#{name} has: " + join_and(hand)
+  def hit
+    super "Drawing a card..."
   end
 
   private
@@ -256,17 +297,8 @@ class Player < Participant
     self.name = name
   end
 
-  def small_linebreak
-    puts ". . ."
-  end
-
-  def display_points
-    puts "Your current points are: #{points}"
-  end
-
   def hit?
-    display_points
-    puts "Hit or stay? (h/s)"
+    prompt "Hit or stay? (h/s)"
     answer = ''
     loop do
       answer = gets.chomp
@@ -275,22 +307,15 @@ class Player < Participant
     end
     answer.start_with?('h')
   end
-
-  def hit
-    draw_card
-    small_linebreak
-    puts "You drew the #{hand.last}!"
-  end
 end
 
 class Dealer < Participant
+  attr_accessor :reveal_cards
+
   def initialize(deck)
     super
     @name = "Dealer"
-  end
-
-  def display_hand
-    puts "#{name} has: #{hand.first} and an unknown card."
+    @reveal_cards = false
   end
 
   def hit?
@@ -298,8 +323,7 @@ class Dealer < Participant
   end
 
   def hit
-    draw_card
-    puts "#{name} draws a card . . ."
+    super "#{name} draws a card..."
   end
 end
 
@@ -317,26 +341,48 @@ class TwentyOne
     @player = Player.new(deck)
     @dealer = Dealer.new(deck)
     @participants = [player, dealer]
+
+    @round_num = 1
   end
 
   def start
-    screenwipe
+    loop do
+      deal_cards
+      turn_loop(player)
+      reveal_dealer_cards
+      turn_loop(dealer) unless player.bust?
 
-    deal_cards
-    display_header
-    display_cards
+      determine_winner
+      update_scores
+      display_results
 
-    player.turn
-    dealer.turn unless player.bust?
+      break unless play_again?
+      reshuffle_cards
+      update_round
+    end
+  end
 
-    determine_winner
-    display_results
+  def turn_loop(participant)
+    loop do
+      refresh_ui
+
+      break if participant.bust?
+      return if participant.stay?
+      participant.hit
+    end
+    participant.bust
   end
 
   private
 
   attr_reader :player, :dealer, :participants
-  attr_accessor :deck, :winner
+  attr_accessor :deck, :winner, :round_num
+
+  def refresh_ui
+    screenwipe
+    display_header
+    display_cards
+  end
 
   def welcome
     screenwipe
@@ -362,17 +408,23 @@ class TwentyOne
   end
 
   def display_header
-    display_big_box("Round 1 - Player's Turn")
+    # display_small_box("Round 1 - Player's Turn")
+    scores = "#{player.score} - #{dealer.score}"
+    text = "Round #{round_num} — Score: #{scores}"
+
+    empty_line
+    puts text.center(MAX_WIDTH)
+    empty_line
   end
 
   def deal_cards
     2.times { participants.each(&:draw_card) }
   end
 
-  def display_cards
+  def display_cards # Split into 2+ methods (hand_info ?)
     info = participants.map do |p|
       divider = '-' * p.name.length
-      if p.is_a?(Player)
+      if p.is_a?(Player) || p.reveal_cards
         hand = p.hand.map(&:to_s)
         total = "Total: #{p.points} points"
       else
@@ -395,6 +447,10 @@ class TwentyOne
     empty_line
   end
 
+  def reveal_dealer_cards
+    dealer.reveal_cards = true
+  end
+
   def determine_winner
     remaining = participants.reject(&:bust?)
     self.winner = remaining.first
@@ -407,18 +463,42 @@ class TwentyOne
                   end
   end
 
-  def display_results
-    participants.each do |p|
-      puts "#{apostrophe_s(p.name)} hand:"
-      puts "#{join_and(p.hand)}"
-      puts "for a total of #{p.points} point#{plural_s(p.points)}."
-    end
+  def update_scores
+    winner.score += 1 if winner
+  end
 
-    if winner
-      puts "#{winner.name} won!"
+  def display_results
+    refresh_ui
+    text = "#{winner.name} won! " unless winner.nil?
+
+    if winner == player
+      say text + ["Congratulations!", "Great going!"].sample
+    elsif winner == dealer
+      say text + ["Better luck next time.", "Too bad."].sample
     else
-      puts "It's a tie!"
+      say "It's a tie! You're evenly matched!"
     end
+  end
+
+  def reshuffle_cards
+    deck.reshuffle
+    participants.each(&:empty_hand)
+    dealer.reveal_cards = false
+  end
+
+  def update_round
+    self.round_num += 1
+  end
+
+  def play_again?
+    prompt "Play again? (y/n)"
+    answer = ''
+    loop do
+      answer = gets.chomp
+      break if answer.start_with?('y') || answer.start_with?('n')
+      puts "Not a valid response, try again."
+    end
+    answer.start_with?('y')
   end
 end
 
