@@ -9,20 +9,20 @@ module Boxable
     puts big_box(text, width)
   end
 
-  def display_two_boxes(text_1, text_2, total_width = MAX_WIDTH)
+  def display_two_boxes(text1, text2, total_width = MAX_WIDTH)
     separator = '  '
     individual_width = (total_width - separator.length) / 2
 
-    texts = [text_1, text_2]
+    texts = [text1, text2]
     texts.map! { |text| force_array(text) }
-    
+
     line_difference = (texts[0].size - texts[1].size).abs
     texts.min_by(&:size).concat([' '] * line_difference)
 
-    box_1 = big_box(texts[0], individual_width)
-    box_2 = big_box(texts[1], individual_width)
+    box1 = big_box(texts[0], individual_width)
+    box2 = big_box(texts[1], individual_width)
 
-    merged = box_1.zip(box_2)
+    merged = box1.zip(box2)
     merged.map! { |line| line.join(separator) }
     puts merged
   end
@@ -40,51 +40,53 @@ module Boxable
   def small_box(text, width = MAX_WIDTH)
     lines = force_array(text)
     formatted_lines = lines.map { |line| plus_center_text(line, width) }
-    
+
     box = [
-            plus_min_bar(width),
-            # plus_space_bar(width),
-            formatted_lines,
-            # plus_space_bar(width),
-            plus_min_bar(width)
-  ].flatten
+      plus_min_bar(width),
+      # plus_space_bar(width),
+      formatted_lines,
+      # plus_space_bar(width),
+      plus_min_bar(width)
+    ]
+    box.flatten
   end
 
   def big_box(text, width = MAX_WIDTH)
     lines = force_array(text)
     formatted_lines = lines.map { |line| sq_center_text(line, width) }
-    
+
     box = [
-            sq_equals_bar(width),
-            sq_space_bar(width),
-            formatted_lines,
-            sq_space_bar(width),
-            sq_equals_bar(width)
-  ].flatten
+      sq_equals_bar(width),
+      sq_space_bar(width),
+      formatted_lines,
+      sq_space_bar(width),
+      sq_equals_bar(width)
+    ]
+    box.flatten
   end
 
   def plus_min_bar(width)
-    '+' + '-' * (width - 2) + '+'
+    "+#{'-' * (width - 2)}+"
   end
 
   def plus_space_bar(width)
-    '|' + ' ' * (width - 2) + '|'
+    "|#{' ' * (width - 2)}|"
   end
 
   def plus_center_text(text, width)
-    '| ' + text.center(width - 4) + ' |'
+    "| #{text.center(width - 4)} |"
   end
 
   def sq_equals_bar(width)
-    '[]' + '=' * (width - 4) + '[]'
+    "[]#{'=' * (width - 4)}[]"
   end
 
   def sq_space_bar(width)
-    '||' + ' ' * (width - 4) + '||'
+    "||#{' ' * (width - 4)}||"
   end
 
   def sq_center_text(text, width)
-    '|| ' + text.center(width - 6) + ' ||'
+    "|| #{text.center(width - 6)} ||"
   end
 end
 
@@ -102,12 +104,12 @@ module Displayable
   end
 
   def say(text)
-    puts "  " + text
+    puts "  #{text}"
     # puts text
   end
 
   def list(text)
-    say(" — " + text)
+    say(" — #{text}")
   end
 
   def prompt(text)
@@ -118,7 +120,8 @@ module Displayable
   def join_and(items)
     if    items.size == 1 then items.first.to_s
     elsif items.size == 2 then items.join(' and ')
-    else  items[0...-1].join(', ') + ', and ' + items.last.to_s
+    else
+      "#{items[0...-1].join(', ')}, and #{items.last}"
     end
   end
 
@@ -127,9 +130,8 @@ module Displayable
   end
 
   def apostrophe_s(name)
-    name.end_with?('s') ? name + "'" : name + "'s"
+    name.end_with?('s') ? "#{name}'" : "#{name}'s"
   end
-  
 end
 
 class Deck
@@ -171,7 +173,7 @@ class Card
   def initialize(s, v)
     @suit = s
     @value = v
-    
+
     @name = "#{value} of #{suit}"
     @worth = initial_worth
   end
@@ -183,7 +185,8 @@ class Card
   def initial_worth
     if face_card? then 10
     elsif ace?    then 11
-    else value.to_i
+    else
+      value.to_i
     end
   end
 
@@ -252,7 +255,7 @@ class Participant
 
   attr_reader :deck
   attr_writer :points, :hand, :name
-  
+
   def update_points
     total = hand.map(&:worth).sum
 
@@ -261,12 +264,9 @@ class Participant
         card.ace? && card.worth == card.initial_worth
       end
 
-      if possible_ace_idx
-        hand[possible_ace_idx].devalue
-        total = hand.map(&:worth).sum
-      else
-        break
-      end
+      break unless possible_ace_idx
+      hand[possible_ace_idx].devalue
+      total = hand.map(&:worth).sum
     end
     self.points = total
   end
@@ -457,9 +457,9 @@ class TwentyOne
     return if remaining.one?
 
     self.winner = case player.points <=> dealer.points
-                  when  1 then player
+                  when 1  then player
                   when -1 then dealer
-                  when  0 then nil
+                  when 0  then nil
                   end
   end
 
