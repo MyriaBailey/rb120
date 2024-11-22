@@ -187,6 +187,10 @@ class Participant
     @score = 0
   end
 
+  def to_s
+    name
+  end
+
   def draw_card
     hand << deck.draw
     update_points
@@ -282,6 +286,8 @@ class Player < Participant
 end
 
 class Dealer < Participant
+  DEALER_STAYS = 17
+
   attr_accessor :reveal_cards
 
   def initialize(deck)
@@ -291,7 +297,7 @@ class Dealer < Participant
   end
 
   def hit?
-    points < 17
+    points < DEALER_STAYS
   end
 
   def hit
@@ -304,6 +310,7 @@ class TwentyOne
   include Boxable
 
   BUST = 21
+  GRAND_SCORE = 5
 
   def initialize
     welcome
@@ -322,15 +329,16 @@ class TwentyOne
       play_game
       end_game
 
+      break if grand_winner?
       break unless play_again?
+
       prep_new_game
     end
+    goodbye
+    cash_prize
   end
 
-  private
-
-  attr_reader :player, :dealer, :participants
-  attr_accessor :deck, :winner, :round_num
+  protected
 
   def play_game
     deal_cards
@@ -350,12 +358,6 @@ class TwentyOne
     participant.bust
   end
 
-  def refresh_ui
-    screenwipe
-    display_header
-    display_cards
-  end
-
   def end_game
     determine_winner
     update_scores
@@ -367,9 +369,14 @@ class TwentyOne
     update_round
   end
 
+  private
+
+  attr_reader :player, :dealer, :participants
+  attr_accessor :deck, :winner, :grand_winner, :round_num
+
   def welcome
     screenwipe
-    display_box("Welcome to 21!")
+    display_box("Welcome to #{BUST}!")
     empty_line
   end
 
@@ -390,10 +397,16 @@ class TwentyOne
       "On your turn, you can either Hit or Stay.",
       "Each time you hit, you draw a card.",
       "You can hit as many times as you'd like, but!",
-      "Going over 21 is a bust and you're out!",
+      "Going over #{BUST} is a bust and you're out!",
       "Choose to stay put if you don't want to risk it!",
-      "The person closest to 21 without going over wins!"
+      "The person closest to #{BUST} without going over wins!"
     ]
+  end
+
+  def refresh_ui
+    screenwipe
+    display_header
+    display_cards
   end
 
   def display_header
@@ -464,7 +477,7 @@ class TwentyOne
 
   def display_results
     refresh_ui
-    text = "#{winner&.name} won! "
+    text = "#{winner} won! "
 
     if winner == player
       say text + ["Congratulations!", "Great going!"].sample
@@ -485,6 +498,15 @@ class TwentyOne
     self.round_num += 1
   end
 
+  def grand_winner?
+    winner_idx = participants.index { |p| p.score >= GRAND_SCORE }
+    return false if winner_idx.nil?
+    self.grand_winner = participants[winner_idx]
+
+    say "Looks like #{grand_winner} won #{GRAND_SCORE} rounds!"
+    true
+  end
+
   def play_again?
     prompt "Play again? (y/n)"
     answer = ''
@@ -494,6 +516,26 @@ class TwentyOne
       prompt "Not a valid response, try again."
     end
     answer.start_with?('y')
+  end
+
+  def goodbye
+    if grand_winner.is_a?(Player)
+      say "Congratulations! You're a pro!"
+    elsif grand_winner.is_a?(Dealer)
+      say "Too bad, try again some other time."
+    else
+      say "See you next time!"
+    end
+  end
+
+  def cash_prize
+    cash = (player.score - dealer.score) * 100
+
+    if cash > 0
+      say "[You won $#{cash}!]"
+    elsif cash < 0
+      say "[You lost $#{cash.abs}...]"
+    end
   end
 end
 
