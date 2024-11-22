@@ -519,6 +519,8 @@ class TwentyOne
   end
 
   def goodbye
+    empty_line
+    
     if grand_winner.is_a?(Player)
       say "Congratulations! You're a pro!"
     elsif grand_winner.is_a?(Dealer)
