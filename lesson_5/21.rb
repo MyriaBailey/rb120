@@ -1,30 +1,22 @@
 module Boxable
   MAX_WIDTH = 60
 
-  def display_small_box(text, width = MAX_WIDTH)
-    puts small_box(text, width)
+  def display_box(text)
+    puts box(text, MAX_WIDTH)
   end
 
-  def display_big_box(text, width = MAX_WIDTH)
-    puts big_box(text, width)
-  end
-
-  def display_two_boxes(text1, text2, total_width = MAX_WIDTH)
+  def display_two_boxes(text1, text2)
     separator = '  '
-    individual_width = (total_width - separator.length) / 2
+    individual_width = (MAX_WIDTH - separator.length) / 2
 
-    texts = [text1, text2]
-    texts.map! { |text| force_array(text) }
+    texts = equalize_texts(text1, text2)
 
-    line_difference = (texts[0].size - texts[1].size).abs
-    texts.min_by(&:size).concat([' '] * line_difference)
+    box1 = box(texts[0], individual_width)
+    box2 = box(texts[1], individual_width)
 
-    box1 = big_box(texts[0], individual_width)
-    box2 = big_box(texts[1], individual_width)
-
-    merged = box1.zip(box2)
-    merged.map! { |line| line.join(separator) }
-    puts merged
+    paired_box_lines = box1.zip(box2)
+    paired_box_lines.map! { |line| line.join(separator) }
+    puts paired_box_lines
   end
 
   def thick_linebreak(width = MAX_WIDTH)
@@ -33,25 +25,21 @@ module Boxable
 
   private
 
+  def equalize_texts(text1, text2)
+    texts = [text1, text2]
+    texts.map! { |text| force_array(text) }
+
+    line_difference = (texts[0].size - texts[1].size).abs
+    texts.min_by(&:size).concat([' '] * line_difference)
+
+    texts
+  end
+
   def force_array(text)
     [text].flatten
   end
 
-  def small_box(text, width = MAX_WIDTH)
-    lines = force_array(text)
-    formatted_lines = lines.map { |line| plus_center_text(line, width) }
-
-    box = [
-      plus_min_bar(width),
-      # plus_space_bar(width),
-      formatted_lines,
-      # plus_space_bar(width),
-      plus_min_bar(width)
-    ]
-    box.flatten
-  end
-
-  def big_box(text, width = MAX_WIDTH)
+  def box(text, width = MAX_WIDTH)
     lines = force_array(text)
     formatted_lines = lines.map { |line| sq_center_text(line, width) }
 
@@ -63,18 +51,6 @@ module Boxable
       sq_equals_bar(width)
     ]
     box.flatten
-  end
-
-  def plus_min_bar(width)
-    "+#{'-' * (width - 2)}+"
-  end
-
-  def plus_space_bar(width)
-    "|#{' ' * (width - 2)}|"
-  end
-
-  def plus_center_text(text, width)
-    "| #{text.center(width - 4)} |"
   end
 
   def sq_equals_bar(width)
@@ -99,13 +75,8 @@ module Displayable
     puts ""
   end
 
-  def linebreak
-    puts "--------------------------------"
-  end
-
   def say(text)
     puts "  #{text}"
-    # puts text
   end
 
   def list(text)
@@ -114,7 +85,6 @@ module Displayable
 
   def prompt(text)
     say(text)
-    # puts "  " + text
   end
 
   def join_and(items)
@@ -138,14 +108,12 @@ class Deck
   SUITS = %w(Hearts Diamonds Clubs Spades)
   VALUES = ('2'..'9').to_a + %w(Jack Queen King Ace)
 
-  attr_reader :cards
-
   def initialize
-    reshuffle
+    @cards = new_deck.shuffle
   end
 
   def reshuffle
-    self.cards = new_deck.shuffle
+    initialize
   end
 
   def draw
@@ -154,7 +122,7 @@ class Deck
 
   private
 
-  attr_writer :cards
+  attr_reader :cards
 
   def new_deck
     new_deck = []
@@ -208,8 +176,7 @@ class Card
 end
 
 class Participant
-  attr_reader :name, :hand, :points
-  attr_accessor :score
+  attr_reader :name, :hand, :points, :score
 
   include Displayable
 
@@ -242,7 +209,7 @@ class Participant
   end
 
   def bust
-    puts "And that's a bust!"
+    say "And that's a bust!"
     sleep 1.75
   end
 
@@ -251,10 +218,14 @@ class Participant
     self.points = 0
   end
 
+  def update_score
+    self.score += 1
+  end
+
   private
 
   attr_reader :deck
-  attr_writer :points, :hand, :name
+  attr_writer :points, :hand, :name, :score
 
   def update_points
     total = hand.map(&:worth).sum
@@ -285,13 +256,13 @@ class Player < Participant
   private
 
   def prompt_name
-    puts "Please enter your name to start:"
+    prompt "Please enter your name to start:"
     name = ''
 
     loop do
       name = gets.strip
       break unless name.empty?
-      puts "Please try again."
+      prompt "Please try again."
     end
 
     self.name = name
@@ -300,10 +271,11 @@ class Player < Participant
   def hit?
     prompt "Hit or stay? (h/s)"
     answer = ''
+
     loop do
       answer = gets.chomp
       break if answer.start_with?('h') || answer.start_with?('s')
-      puts "Not a valid response, try again."
+      prompt "Not a valid response, try again."
     end
     answer.start_with?('h')
   end
@@ -347,19 +319,24 @@ class TwentyOne
 
   def start
     loop do
-      deal_cards
-      turn_loop(player)
-      reveal_dealer_cards
-      turn_loop(dealer) unless player.bust?
-
-      determine_winner
-      update_scores
-      display_results
+      play_game
+      end_game
 
       break unless play_again?
-      reshuffle_cards
-      update_round
+      prep_new_game
     end
+  end
+
+  private
+
+  attr_reader :player, :dealer, :participants
+  attr_accessor :deck, :winner, :round_num
+
+  def play_game
+    deal_cards
+    turn_loop(player)
+    reveal_dealer_cards
+    turn_loop(dealer) unless player.bust?
   end
 
   def turn_loop(participant)
@@ -373,20 +350,26 @@ class TwentyOne
     participant.bust
   end
 
-  private
-
-  attr_reader :player, :dealer, :participants
-  attr_accessor :deck, :winner, :round_num
-
   def refresh_ui
     screenwipe
     display_header
     display_cards
   end
 
+  def end_game
+    determine_winner
+    update_scores
+    display_results
+  end
+
+  def prep_new_game
+    reshuffle_cards
+    update_round
+  end
+
   def welcome
     screenwipe
-    display_big_box("Welcome to 21!")
+    display_box("Welcome to 21!")
     empty_line
   end
 
@@ -394,21 +377,26 @@ class TwentyOne
     say "Here's how to play:"
     empty_line
 
-    list "Each player is dealt two cards to start with."
-    list "On your turn, you can either Hit or Stay."
-    list "Each time you hit, you draw a card."
-    list "You can hit as many times as you'd like, but!"
-    list "Going over 21 is a bust and you're out!"
-    list "Choose to stay put if you don't want to risk it!"
-    list "The person closest to 21 without going over wins!"
+    rules_list.each { |rule| list(rule) }
 
     empty_line
     thick_linebreak
     empty_line
   end
 
+  def rules_list
+    [
+      "Each player is dealt two cards to start with.",
+      "On your turn, you can either Hit or Stay.",
+      "Each time you hit, you draw a card.",
+      "You can hit as many times as you'd like, but!",
+      "Going over 21 is a bust and you're out!",
+      "Choose to stay put if you don't want to risk it!",
+      "The person closest to 21 without going over wins!"
+    ]
+  end
+
   def display_header
-    # display_small_box("Round 1 - Player's Turn")
     scores = "#{player.score} - #{dealer.score}"
     text = "Round #{round_num} — Score: #{scores}"
 
@@ -421,30 +409,37 @@ class TwentyOne
     2.times { participants.each(&:draw_card) }
   end
 
-  def display_cards # Split into 2+ methods (hand_info ?)
-    info = participants.map do |p|
-      divider = '-' * p.name.length
-      if p.is_a?(Player) || p.reveal_cards
-        hand = p.hand.map(&:to_s)
-        total = "Total: #{p.points} points"
-      else
-        hand = p.hand.map.with_index do |card, idx|
-          idx == 0 ? card.to_s : "Unknown card"
-        end
-        total = "Total: Unknown"
-      end
+  def display_cards
+    box_texts = participants.map { |p| hand_info(p) }
 
-      [
-        p.name,
-        divider,
-        hand,
-        divider,
-        total
-      ].flatten
+    display_two_boxes(box_texts.first, box_texts.last)
+    empty_line
+  end
+
+  def hand_info(p)
+    if p.is_a?(Player) || p.reveal_cards
+      hand = p.hand.map(&:to_s)
+      total = "Total: #{p.points} points"
+    else
+      hand = p.hand.map.with_index do |card, idx|
+        idx == 0 ? card.to_s : "Unknown card"
+      end
+      total = "Total: Unknown"
     end
 
-    display_two_boxes(info.first, info.last)
-    empty_line
+    organize_hand_info(p.name, hand, total)
+  end
+
+  def organize_hand_info(name, hand, total)
+    divider = '-' * name.length
+
+    [
+      name,
+      divider,
+      hand,
+      divider,
+      total
+    ].flatten
   end
 
   def reveal_dealer_cards
@@ -464,12 +459,12 @@ class TwentyOne
   end
 
   def update_scores
-    winner.score += 1 if winner
+    winner&.update_score
   end
 
   def display_results
     refresh_ui
-    text = "#{winner.name} won! " unless winner.nil?
+    text = "#{winner&.name} won! "
 
     if winner == player
       say text + ["Congratulations!", "Great going!"].sample
@@ -496,7 +491,7 @@ class TwentyOne
     loop do
       answer = gets.chomp
       break if answer.start_with?('y') || answer.start_with?('n')
-      puts "Not a valid response, try again."
+      prompt "Not a valid response, try again."
     end
     answer.start_with?('y')
   end
